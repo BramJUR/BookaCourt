@@ -14,8 +14,8 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 load_dotenv()
 
 # --- Securely Load Login Details ---
-EMAIL = os.getenv("EMAIL")
-PASSWORD = os.getenv("PASSWORD")
+EMAIL = "bramjurrius@aol.com"
+PASSWORD = "Hond!123"
 
 # --- Helper Functions ---
 def add_player(driver, wait, player_name):
