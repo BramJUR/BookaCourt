@@ -21,6 +21,12 @@ def login_and_navigate_to_courts(driver, wait):
     """Performs all steps up to viewing the court schedule for the correct day."""
     print("Navigating to the website...")
     driver.get("https://www.ltvbest.nl/")
+
+    # Wacht tot de basis van de pagina (de body) geladen is.
+    print("Waiting for page body to be present...")
+    wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+    print("Page body found.")
+
     try:
         print("Checking for cookie banner...")
         cookie_wait = WebDriverWait(driver, 5)
@@ -31,6 +37,7 @@ def login_and_navigate_to_courts(driver, wait):
         time.sleep(1)
     except TimeoutException:
         print("No cookie banner found, continuing...")
+        
     print("Clicking the login button...")
     login_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[text()='Inloggen']")))
     login_button.click()
