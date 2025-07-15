@@ -1,14 +1,9 @@
 name: Run Tennis Court Reservation Bot
 
 on:
-  workflow_dispatch: # Allows you to run the job manually from the Actions tab
+  workflow_dispatch:
   schedule:
-    # Schedule 1: For Dutch Winter Time (CET, UTC+1)
-    # Runs at 23:01 UTC on Wednesday, which is 00:01 CET on Thursday in the Netherlands.
     - cron: '1 23 * * 3'
-    
-    # Schedule 2: For Dutch Summer Time (CEST, UTC+2)
-    # Runs at 22:01 UTC on Wednesday, which is 00:01 CEST on Thursday in the Netherlands.
     - cron: '1 22 * * 3'
 
 jobs:
@@ -30,8 +25,17 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run the bot
+        id: bot-run # Geef de stap een ID
         env:
-          # Use the secrets you configured in your repository settings
           EMAIL: ${{ secrets.EMAIL }}
           PASSWORD: ${{ secrets.PASSWORD }}
         run: python -u "Book a Court.py"
+
+      # ✨ --- NIEUWE STAP: Upload de screenshot als deze bestaat --- ✨
+      - name: Upload Screenshot Artifact
+        if: failure() && steps.bot-run.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-screenshot
+          path: error_screenshot.png
+      # --- EINDE NIEUWE STAP ---
