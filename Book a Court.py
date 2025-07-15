@@ -96,10 +96,12 @@ def complete_reservation(driver, wait):
     duration_players_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(., '60 min.') and contains(., '4')]")))
     duration_players_button.click()
     time.sleep(1)
+    
     print("\nAdding players to the reservation...")
     player_2_box = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'css-18nf95b') and normalize-space(.//span)='Speler 2']")))
     player_2_box.click()
     time.sleep(2)
+    
     players_to_add = ["Luc Brenkman", "Valentijn Wiegmans", "Willem Peters"]
     for player in players_to_add:
         print(f"Adding player: {player}...")
@@ -108,11 +110,23 @@ def complete_reservation(driver, wait):
         add_button.click()
         print(f"Successfully added {player}.")
         time.sleep(1)
+        
     print("\nWaiting 3 seconds before confirming reservation...")
     time.sleep(3)
+    
     print("Clicking 'Reservering bevestigen' button...")
-    confirm_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Reservering bevestigen')]")))
-    confirm_button.click()
+    confirm_button_xpath = "//button[contains(., 'Reservering bevestigen')]"
+    
+    # 1. Wacht tot de knop aanwezig is in de DOM
+    confirm_button = wait.until(EC.presence_of_element_located((By.XPATH, confirm_button_xpath)))
+    
+    # 2. Scroll de knop naar het midden van het scherm
+    driver.execute_script("arguments[0].scrollIntoView({block: 'center', inline: 'nearest'});", confirm_button)
+    time.sleep(1) # Kleine pauze voor stabiliteit na het scrollen
+    
+    # 3. Klik op de knop met JavaScript
+    driver.execute_script("arguments[0].click();", confirm_button)
+    print("Confirmation click sent.")
     time.sleep(5)
 
 # --- Main Execution Block ---
