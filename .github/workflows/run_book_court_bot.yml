@@ -34,4 +34,4 @@ jobs:
           # Use the secrets you configured in your repository settings
           EMAIL: ${{ secrets.EMAIL }}
           PASSWORD: ${{ secrets.PASSWORD }}
-        run: python "Book a Court.py"
+        run: python -u "Book a Court.py"
