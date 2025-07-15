@@ -1,5 +1,6 @@
 import time
 import os
+import sys # <-- TOEGEVOEGD
 from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -20,7 +21,6 @@ def login_and_navigate_to_courts(driver, wait):
     """Performs all steps up to viewing the court schedule for the correct day."""
     print("Navigating to the website...")
     driver.get("https://www.ltvbest.nl/")
-
     try:
         print("Checking for cookie banner...")
         cookie_wait = WebDriverWait(driver, 5)
@@ -31,22 +31,18 @@ def login_and_navigate_to_courts(driver, wait):
         time.sleep(1)
     except TimeoutException:
         print("No cookie banner found, continuing...")
-
     print("Clicking the login button...")
     login_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[text()='Inloggen']")))
     login_button.click()
-
     print("Entering credentials...")
     email_input = wait.until(EC.visibility_of_element_located((By.ID, "login-username")))
     email_input.send_keys(EMAIL)
     password_input = driver.find_element(By.ID, "login-password")
     password_input.send_keys(PASSWORD)
-
     print("Submitting login form...")
     submit_button = driver.find_element(By.XPATH, "//input[@value='Inloggen']")
     submit_button.click()
     time.sleep(2)
-
     print("Navigating to the court reservation page...")
     mijnltvbest_link = wait.until(EC.visibility_of_element_located((By.XPATH, "//a[contains(., 'MIJNLTVBEST')]")))
     actions = ActionChains(driver)
@@ -54,13 +50,11 @@ def login_and_navigate_to_courts(driver, wait):
     reserve_link = wait.until(EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, "Baan reserveren")))
     reserve_link.click()
     time.sleep(2)
-
     print("Switching to iframe and opening court overview...")
     iframe = wait.until(EC.presence_of_element_located((By.TAG_NAME, "iframe")))
     driver.switch_to.frame(iframe)
     overview_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Overzicht banen')]")))
     overview_button.click()
-
     print("Opening the date picker and selecting the day...")
     today_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Vandaag')]")))
     today_button.click()
@@ -87,15 +81,14 @@ def find_and_select_slot(driver, wait):
                     print(f"Found an available slot on row {index + 1}. Clicking it.")
                     driver.execute_script("arguments[0].click();", thirteenth_slot)
                     time.sleep(1)
-                    return True # Slot found and clicked
+                    return True
                 except NoSuchElementException:
                     print(f"Slot on row {index + 1} is not available.")
             else:
                 print(f"Row {index + 1} does not have 13 slots.")
     except TimeoutException:
         print("Could not find court rows. Page might not have loaded correctly.")
-
-    return False # No available slot was found
+    return False
 
 def complete_reservation(driver, wait):
     """Adds players and confirms the booking after a slot has been selected."""
@@ -103,13 +96,10 @@ def complete_reservation(driver, wait):
     duration_players_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(., '60 min.') and contains(., '4')]")))
     duration_players_button.click()
     time.sleep(1)
-
     print("\nAdding players to the reservation...")
     player_2_box = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'css-18nf95b') and normalize-space(.//span)='Speler 2']")))
     player_2_box.click()
     time.sleep(2)
-    
-    # Add players by name
     players_to_add = ["Luc Brenkman", "Valentijn Wiegmans", "Willem Peters"]
     for player in players_to_add:
         print(f"Adding player: {player}...")
@@ -118,10 +108,8 @@ def complete_reservation(driver, wait):
         add_button.click()
         print(f"Successfully added {player}.")
         time.sleep(1)
-
     print("\nWaiting 3 seconds before confirming reservation...")
     time.sleep(3)
-    
     print("Clicking 'Reservering bevestigen' button...")
     confirm_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Reservering bevestigen')]")))
     confirm_button.click()
@@ -132,27 +120,19 @@ if __name__ == "__main__":
     if not EMAIL or not PASSWORD:
         print("Error: EMAIL or PASSWORD environment variables not set.")
         exit()
-
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
-
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
     wait = WebDriverWait(driver, 20)
-    
     try:
-        # --- STEP 1: EENMALIGE SETUP ---
-        # Als dit mislukt, stopt het hele script.
         print("--- Performing initial login and navigation ---")
         login_and_navigate_to_courts(driver, wait)
         print("--- Login and navigation successful ---")
-
-        # --- STEP 2: HERHAALDE ZOEKTOCHT NAAR TIJDSLOT ---
-        # Dit deel wordt herhaald als er geen tijdslot wordt gevonden.
         slot_found = False
         max_attempts = 100
         for attempt in range(max_attempts):
@@ -160,34 +140,29 @@ if __name__ == "__main__":
             if find_and_select_slot(driver, wait):
                 print("✅ Available time slot found and selected!")
                 slot_found = True
-                break  # Stop de for-loop, ga door naar reservering afronden
+                break
             else:
                 print("❌ No available slot found on this attempt.")
                 if attempt < max_attempts - 1:
-                    # Refresh de pagina om eventuele nieuwe slots te zien na de wachttijd
                     print("Refreshing the page before the next attempt.")
                     driver.refresh()
-                    time.sleep(5) # Wacht tot de pagina herladen is
+                    time.sleep(5)
                     print("Will retry in 15 minutes...")
                     time.sleep(15 * 60)
                 else:
                     print("Maximum number of attempts reached.")
-
-        # --- STEP 3: AFRONDEN RESERVERING (alleen als een slot is gevonden) ---
         if slot_found:
             print("\n--- Completing reservation ---")
             complete_reservation(driver, wait)
             print("\n🎉 Reservation successfully completed!")
         else:
             print("\nCould not find a time slot after all attempts. Exiting.")
-
     except Exception as e:
-        # Vangt alleen fatale fouten op van de setup of het afronden.
         print(f"\n❌ A fatal error occurred: {e}")
         print("The script will now terminate.")
         driver.save_screenshot('fatal_error.png')
         print("Screenshot saved as fatal_error.png")
-
+        sys.exit(1) # <-- GEWIJZIGD
     finally:
         print("\nClosing browser session.")
         driver.quit()
