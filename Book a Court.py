@@ -57,11 +57,16 @@ def login_and_navigate_to_courts(driver, wait):
     reserve_link = wait.until(EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, "Baan reserveren")))
     reserve_link.click()
     time.sleep(2)
-    print("Switching to iframe and opening court overview...")
-    iframe = wait.until(EC.presence_of_element_located((By.TAG_NAME, "iframe")))
-    driver.switch_to.frame(iframe)
+    
+    # Gebruik een robuustere methode om op de iframe te wachten en ernaar te switchen.
+    print("Waiting for reservation iframe and switching to it...")
+    wait.until(EC.frame_to_be_available_and_switch_to_it((By.TAG_NAME, "iframe")))
+    print("Successfully switched to iframe.")
+    
+    print("Opening court overview...")
     overview_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Overzicht banen')]")))
     overview_button.click()
+    
     print("Opening the date picker and selecting the day...")
     today_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Vandaag')]")))
     today_button.click()
