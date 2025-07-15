@@ -2,6 +2,7 @@ import time
 import os
 from dotenv import load_dotenv
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options # 👈 IMPORT ADDED
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.chrome.service import Service
@@ -14,8 +15,8 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 load_dotenv()
 
 # --- Securely Load Login Details ---
-EMAIL = "bramjurrius@aol.com"
-PASSWORD = "Hond!123"
+EMAIL = os.getenv("EMAIL")
+PASSWORD = os.getenv("PASSWORD")
 
 # --- Helper Functions ---
 def add_player(driver, wait, player_name):
@@ -43,11 +44,21 @@ def reserve_court():
     # Check if credentials were loaded
     if not EMAIL or not PASSWORD:
         print("Error: EMAIL or PASSWORD environment variables not set.")
+        print("Please ensure you have configured repository secrets in GitHub.")
         return False
+
+    # ⚙️ Configure Chrome options for headless environment
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
 
     # Set up the Chrome browser with Selenium for a fresh session
     service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service)
+    # ✨ Pass the options to the driver
+    driver = webdriver.Chrome(service=service, options=chrome_options)
     wait = WebDriverWait(driver, 20)
 
     try:
@@ -162,7 +173,7 @@ def reserve_court():
 
     except Exception as e:
         print(f"\n❌ An error occurred during the reservation process: {e}")
-        # driver.save_screenshot('error_screenshot.png') # Uncomment to debug
+        driver.save_screenshot('error_screenshot.png')
         return False
 
     finally:
