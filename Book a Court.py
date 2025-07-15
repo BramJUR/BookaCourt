@@ -1,6 +1,6 @@
 import time
 import os
-import sys # <-- TOEGEVOEGD
+import sys
 from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -120,15 +120,26 @@ if __name__ == "__main__":
     if not EMAIL or not PASSWORD:
         print("Error: EMAIL or PASSWORD environment variables not set.")
         exit()
+        
     chrome_options = Options()
+
+    # Opties om botdetectie te omzeilen
+    user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+    chrome_options.add_argument(f'user-agent={user_agent}')
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
+    
+    # Standaard headless opties
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
+
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
     wait = WebDriverWait(driver, 20)
+    
     try:
         print("--- Performing initial login and navigation ---")
         login_and_navigate_to_courts(driver, wait)
@@ -162,7 +173,7 @@ if __name__ == "__main__":
         print("The script will now terminate.")
         driver.save_screenshot('fatal_error.png')
         print("Screenshot saved as fatal_error.png")
-        sys.exit(1) # <-- GEWIJZIGD
+        sys.exit(1)
     finally:
         print("\nClosing browser session.")
         driver.quit()
