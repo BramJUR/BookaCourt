@@ -64,7 +64,8 @@ def login_and_navigate_to_courts(driver, wait):
     print("Successfully switched to iframe.")
     
     print("Opening court overview...")
-    overview_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Overzicht banen')]")))
+    overview_button_xpath = "//button[contains(., 'Overzicht banen') or contains(., 'Baanoverzicht')]"
+    overview_button = wait.until(EC.element_to_be_clickable((By.XPATH, overview_button_xpath)))
     overview_button.click()
     
     print("Opening the date picker and selecting the day...")
