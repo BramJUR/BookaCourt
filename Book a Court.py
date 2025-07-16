@@ -22,7 +22,6 @@ def login_and_navigate_to_courts(driver, wait):
     print("Navigating to the website...")
     driver.get("https://www.ltvbest.nl/")
 
-    # Wacht tot de basis van de pagina (de body) geladen is.
     print("Waiting for page body to be present...")
     wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
     print("Page body found.")
@@ -50,6 +49,7 @@ def login_and_navigate_to_courts(driver, wait):
     submit_button = driver.find_element(By.XPATH, "//input[@value='Inloggen']")
     submit_button.click()
     time.sleep(2)
+
     print("Navigating to the court reservation page...")
     mijnltvbest_link = wait.until(EC.visibility_of_element_located((By.XPATH, "//a[contains(., 'MIJNLTVBEST')]")))
     actions = ActionChains(driver)
@@ -58,7 +58,6 @@ def login_and_navigate_to_courts(driver, wait):
     reserve_link.click()
     time.sleep(2)
     
-    # Gebruik een robuustere methode om op de iframe te wachten en ernaar te switchen.
     print("Waiting for reservation iframe and switching to it...")
     wait.until(EC.frame_to_be_available_and_switch_to_it((By.TAG_NAME, "iframe")))
     print("Successfully switched to iframe.")
@@ -68,9 +67,36 @@ def login_and_navigate_to_courts(driver, wait):
     overview_button = wait.until(EC.element_to_be_clickable((By.XPATH, overview_button_xpath)))
     overview_button.click()
     
-    print("Opening the date picker and selecting the day...")
-    today_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Vandaag')]")))
-    today_button.click()
+    # --- NIEUWE FLEXIBELE LOGICA ---
+    # Eerst wachten we altijd tot de bekende laad-overlay weg is.
+    print("Waiting for any loading overlay to disappear...")
+    try:
+        # Gebruik een korte wachttijd; de overlay is meestal snel weg.
+        WebDriverWait(driver, 5).until(EC.invisibility_of_element_located((By.CLASS_NAME, "MuiBackdrop-root")))
+        print("Loading overlay handled.")
+    except TimeoutException:
+        print("No loading overlay was detected.")
+
+    # Nu proberen we de datumkiezer te openen.
+    print("Opening the date picker...")
+    try:
+        # Poging 1: Klik direct op "Vandaag".
+        today_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Vandaag')]")))
+        today_button.click()
+    except Exception:
+        # Poging 2: Als dat mislukt, klik dan eerst nogmaals op "Overzicht banen".
+        print("Could not click 'Vandaag', assuming alternate layout and clicking 'Overzicht banen' again.")
+        overview_button = wait.until(EC.element_to_be_clickable((By.XPATH, overview_button_xpath)))
+        overview_button.click()
+        
+        # Probeer nu opnieuw op "Vandaag" te klikken.
+        print("Retrying to click 'Vandaag'...")
+        today_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Vandaag')]")))
+        today_button.click()
+    # --- EINDE NIEUWE LOGICA ---
+
+    # Dit deel wordt alleen uitgevoerd nadat "Vandaag" succesvol is aangeklikt.
+    print("Selecting the day...")
     day_element = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Zaterdag')]")))
     day_element.click()
     print("Selected 'Zaterdag'.")
