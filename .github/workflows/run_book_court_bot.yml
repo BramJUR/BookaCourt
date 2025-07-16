@@ -3,8 +3,11 @@ name: Run Tennis Court Reservation Bot
 on:
   workflow_dispatch:
   schedule:
-    - cron: '1 23 * * 3'
-    - cron: '1 22 * * 3'
+    # Runs at 23:01 UTC on Thursday (00:01 CET Friday in NL - Winter)
+    - cron: '1 23 * * 4'
+    
+    # Runs at 22:01 UTC on Thursday (00:01 CEST Friday in NL - Summer)
+    - cron: '1 22 * * 4'
 
 jobs:
   run-reservation-bot:
@@ -31,9 +34,16 @@ jobs:
           PASSWORD: ${{ secrets.PASSWORD }}
         run: python -u "Book a Court.py"
 
-      - name: Upload Screenshot Artifact
-        if: failure() # <-- GEWIJZIGD/VEREENVOUDIGD
+      - name: Upload Failure Screenshot
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: error-screenshot
           path: fatal_error.png
+
+      - name: Upload Success Screenshot
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: success-screenshot
+          path: success_screenshot.png
