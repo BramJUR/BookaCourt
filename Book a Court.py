@@ -121,7 +121,7 @@ def complete_reservation(driver, wait):
         add_button = wait.until(EC.element_to_be_clickable((By.XPATH, add_button_xpath)))
         add_button.click()
         print(f"Successfully added {player}.")
-        time.sleep(1)
+        time.sleep(2)
         
     print("\nWaiting 3 seconds before confirming reservation...")
     time.sleep(3)
@@ -141,6 +141,7 @@ def complete_reservation(driver, wait):
     print("Confirmation click sent.")
     time.sleep(5)
 
+# --- Main Execution Block ---
 # --- Main Execution Block ---
 if __name__ == "__main__":
     if not EMAIL or not PASSWORD:
@@ -192,14 +193,23 @@ if __name__ == "__main__":
             print("\n--- Completing reservation ---")
             complete_reservation(driver, wait)
             print("\n🎉 Reservation successfully completed!")
+            
+            # --- NIEUWE STAP: Screenshot bij succes ---
+            print("Taking a screenshot of the successful reservation...")
+            driver.save_screenshot('success_screenshot.png')
+            print("Screenshot saved as success_screenshot.png")
+            # --- EINDE NIEUWE STAP ---
+            
         else:
             print("\nCould not find a time slot after all attempts. Exiting.")
+            
     except Exception as e:
         print(f"\n❌ A fatal error occurred: {e}")
         print("The script will now terminate.")
         driver.save_screenshot('fatal_error.png')
         print("Screenshot saved as fatal_error.png")
         sys.exit(1)
+        
     finally:
         print("\nClosing browser session.")
         driver.quit()
