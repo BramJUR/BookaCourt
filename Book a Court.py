@@ -153,20 +153,38 @@ def complete_reservation(driver, wait):
     print("\nWaiting 3 seconds before confirming reservation...")
     time.sleep(3)
     
-    print("Clicking 'Reservering bevestigen' button...")
+    print("Attempting to click 'Reservering bevestigen' button...")
     confirm_button_xpath = "//button[contains(., 'Reservering bevestigen')]"
-    
-    # 1. Wacht tot de knop aanwezig is in de DOM
-    confirm_button = wait.until(EC.presence_of_element_located((By.XPATH, confirm_button_xpath)))
-    
-    # 2. Scroll de knop naar het midden van het scherm
-    driver.execute_script("arguments[0].scrollIntoView({block: 'center', inline: 'nearest'});", confirm_button)
-    time.sleep(1) # Kleine pauze voor stabiliteit na het scrollen
-    
-    # 3. Klik op de knop met JavaScript
-    driver.execute_script("arguments[0].click();", confirm_button)
-    print("Confirmation click sent.")
-    time.sleep(5)
+
+    for i in range(3):
+        try:
+            print(f"Attempt {i + 1} to click confirmation button...")
+            confirm_button = wait.until(EC.element_to_be_clickable((By.XPATH, confirm_button_xpath)))
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center', inline: 'nearest'});", confirm_button)
+            time.sleep(1) 
+            driver.execute_script("arguments[0].click();", confirm_button)
+            print("Confirmation click sent.")
+            
+            # --- ✨ NIEUWE VERIFICATIESTAP ✨ ---
+            # Wacht expliciet op de succesmelding. Als deze niet verschijnt, geeft dit een TimeoutException.
+            print("Waiting for success notification...")
+            # Deze XPath zoekt naar een element (zoals een div) dat de tekst 'succesvol' bevat.
+            success_popup_xpath = "//*[contains(text(), 'succesvol')]"
+            # Gebruik een nieuwe, kortere wachttijd speciaal voor de pop-up.
+            WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.XPATH, success_popup_xpath)))
+            print("Success notification appeared! Reservation is confirmed.")
+            # --- EINDE NIEUWE VERIFICATIESTAP ---
+            
+            return # Verlaat de functie succesvol na het zien van de pop-up.
+
+        except Exception as e:
+            print(f"Attempt {i + 1} failed: {e}")
+            if i < 2:
+                print("Waiting 2 seconds before retrying...")
+                time.sleep(2)
+            else:
+                print("All attempts to click and verify the confirmation have failed.")
+                raise # Geef de fout door als het na 3 keer nog niet lukt
 
 # --- Main Execution Block ---
 # --- Main Execution Block ---
