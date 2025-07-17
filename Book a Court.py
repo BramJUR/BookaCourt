@@ -97,7 +97,7 @@ def login_and_navigate_to_courts(driver, wait):
 
     # Dit deel wordt alleen uitgevoerd nadat "Vandaag" succesvol is aangeklikt.
     print("Selecting the day...")
-    day_element = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Zaterdag')]")))
+    day_element = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Donderdag')]")))
     day_element.click()
     print("Selected 'Zaterdag'.")
     time.sleep(2)
