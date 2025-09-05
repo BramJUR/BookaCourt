@@ -105,61 +105,77 @@ def login_and_navigate_to_courts(driver, wait):
 
 def find_and_select_slot(driver, wait):
     """
-    Scans for the first available slot starting between 20:30 and 21:30.
-    It does this by finding the vertical position of the time labels and matching
-    them against the vertical position of available slot buttons.
+    Finds and selects the first available court slot between 20:30 and 21:30.
+    This version is more robust, handling iframe context, loading spinners, and
+    waits for element visibility.
     Returns True if a slot is found and clicked, False otherwise.
     """
-    print("Searching for the first available slot between 20:30 and 21:30...")
     try:
-        # Step 1: Find the vertical coordinates of the desired time range.
-        # We use '20:30' as the start and '22:00' as the exclusive end boundary.
-        start_time_element = wait.until(EC.presence_of_element_located((By.XPATH, "//span[text()='20:30']")))
-        end_time_element = wait.until(EC.presence_of_element_located((By.XPATH, "//span[text()='22:00']")))
+        # --- KEY FIX #1: ALWAYS RE-ENTER THE IFRAME ---
+        # After a page refresh, the driver loses iframe context. We must switch back.
+        print("Ensuring focus is within the reservation iframe...")
+        driver.switch_to.default_content() # Go to top level first
+        wait.until(EC.frame_to_be_available_and_switch_to_it((By.TAG_NAME, "iframe")))
+        print("Successfully focused on iframe.")
+
+        # --- KEY FIX #2: HANDLE ANY LOADING SPINNERS ---
+        # Wait for the grey loading overlay to disappear before searching for elements.
+        print("Waiting for any loading spinners to disappear...")
+        wait.until(EC.invisibility_of_element_located((By.CLASS_NAME, "MuiBackdrop-root")))
+        print("Spinners are gone. Page is ready.")
+
+        # --- KEY FIX #3: WAIT FOR VISIBILITY, NOT JUST PRESENCE ---
+        print("Searching for time labels to define search area...")
+        start_time_element = wait.until(EC.visibility_of_element_located((By.XPATH, "//span[text()='20:30']")))
+        end_time_element = wait.until(EC.visibility_of_element_located((By.XPATH, "//span[text()='22:00']")))
 
         start_y = start_time_element.location['y']
         end_y = end_time_element.location['y']
-        
-        # A small tolerance to account for minor pixel misalignments
-        tolerance = 5
-        
-        print(f"Time range y-coordinates found: Start at ~{start_y:.0f}px, End before ~{end_y:.0f}px.")
+        tolerance = 5 # Allows for minor pixel misalignments
+        print(f"Time range y-coordinates defined: Start=~{start_y:.0f}px, End=~{end_y:.0f}px.")
 
-        # Step 2: Get all court rows to iterate through them.
-        # This XPath finds the containers for each court's timeline.
-        court_rows = wait.until(EC.presence_of_all_elements_located((By.XPATH, "//div[div/span[contains(text(),'- Padel')]]/following-sibling::div")))
+        # Get all court timeline containers
+        court_slot_containers = wait.until(EC.visibility_of_all_elements_located((
+            By.XPATH, "//div[div/span[contains(text(),'- Padel')]]/following-sibling::div"
+        )))
 
-        # Step 3: Iterate through each court and check for available slots in the time range.
-        for index, row in enumerate(court_rows[:7]): # Checking the first 7 padel courts
-            print(f"Checking Padel Court {index + 1}...")
-            
-            # Find only the available slots (buttons with the green plus icon) in the current row
-            available_slots = row.find_elements(By.XPATH, ".//button[.//div[contains(@class, 'css-wpwytb')]]")
-            
+        # --- Iterate through each court to find a matching slot ---
+        for index, container in enumerate(court_slot_containers[:7]):
+            court_name = f"Padel Court {index + 1}"
+            print(f"Scanning {court_name}...")
+
+            # Find only available slots (buttons with the green plus icon)
+            available_slots = container.find_elements(By.XPATH, ".//button[.//div[contains(@class, 'css-wpwytb')]]")
+
             if not available_slots:
-                print(f"No available slots found on Court {index + 1}.")
-                continue
+                continue # No available slots on this court, move to the next
 
             for slot in available_slots:
                 slot_y = slot.location['y']
-                
-                # Check if the slot's vertical position is within our target time range
+                # Check if the slot's vertical position is within our target range
                 if (start_y - tolerance) <= slot_y < (end_y - tolerance):
-                    print(f"✅ Found an available slot in the desired time range on Court {index + 1}!")
-                    print("Attempting to click the slot...")
+                    print(f"✅ Success! Found an available slot on {court_name} in the target time range.")
+                    driver.execute_script("arguments[0].scrollIntoView(true);", slot) # Scroll to the button
+                    time.sleep(0.5) # Brief pause after scroll
                     driver.execute_script("arguments[0].click();", slot)
-                    time.sleep(1)
-                    return True # Slot found and clicked, exit the function
+                    driver.switch_to.default_content() # Exit iframe before next step
+                    return True
 
-        # If the loop finishes without finding a suitable slot
-        print("❌ No available slots found between 20:30 and 21:30 on any court.")
+        print("❌ No available slots found between 20:30 and 21:30 on any court this attempt.")
+        driver.switch_to.default_content() # Exit iframe before returning
         return False
 
-    except TimeoutException:
-        print("Could not find time labels or court rows. The page structure may have changed.")
+    except TimeoutException as e:
+        print("A timeout occurred. The page structure may have changed, or elements didn't load in time.")
+        # Taking a screenshot here can be very helpful for debugging
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        driver.save_screenshot(f'debug_screenshot_{timestamp}.png')
+        print(f"Debug screenshot saved as debug_screenshot_{timestamp}.png")
+        driver.switch_to.default_content() # Ensure we exit iframe on error
         return False
     except Exception as e:
-        print(f"An unexpected error occurred while finding a slot: {e}")
+        print(f"An unexpected error occurred in find_and_select_slot: {e}")
+        driver.switch_to.default_content()
         return False
 
 def complete_reservation(driver, wait):
