@@ -1,6 +1,7 @@
 import time
 import os
 import sys
+from datetime import datetime  # <-- ADDED IMPORT
 from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -48,7 +49,7 @@ def login_and_navigate_to_courts(driver, wait):
     print("Submitting login form...")
     submit_button = driver.find_element(By.XPATH, "//input[@value='Inloggen']")
     submit_button.click()
-    time.sleep(2)
+    time.sleep(1)
 
     print("Navigating to the court reservation page...")
     mijnltvbest_link = wait.until(EC.visibility_of_element_located((By.XPATH, "//a[contains(., 'MIJNLTVBEST')]")))
@@ -56,7 +57,7 @@ def login_and_navigate_to_courts(driver, wait):
     actions.move_to_element(mijnltvbest_link).perform()
     reserve_link = wait.until(EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, "Baan reserveren")))
     reserve_link.click()
-    time.sleep(2)
+    time.sleep(1)
     
     print("Waiting for reservation iframe and switching to it...")
     wait.until(EC.frame_to_be_available_and_switch_to_it((By.TAG_NAME, "iframe")))
@@ -99,8 +100,8 @@ def login_and_navigate_to_courts(driver, wait):
     print("Selecting the day...")
     day_element = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Donderdag')]")))
     day_element.click()
-    print("Selected 'Zaterdag'.")
-    time.sleep(2)
+    print("Selected 'Donderdag'.")
+    time.sleep(1)
 
 def find_and_select_slot(driver, wait):
     """
@@ -178,7 +179,7 @@ def complete_reservation(driver, wait):
     except Exception as e:
         print("The ActionChains click method also failed.")
         raise e # Geef de fout door zodat de main error handler het oppakt.
-# --- Main Execution Block ---
+
 # --- Main Execution Block ---
 if __name__ == "__main__":
     if not EMAIL or not PASSWORD:
@@ -239,6 +240,14 @@ if __name__ == "__main__":
             
         else:
             print("\nCould not find a time slot after all attempts. Exiting.")
+            
+            # --- NEW: SCREENSHOT WHEN NO SLOTS ARE FOUND ---
+            print("Taking a screenshot of the court overview...")
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            filename = f"no_slot_available_{timestamp}.png"
+            driver.save_screenshot(filename)
+            print(f"Screenshot saved as {filename}")
+            # --- END OF NEW CODE ---
             
     except Exception as e:
         print(f"\n❌ A fatal error occurred: {e}")
