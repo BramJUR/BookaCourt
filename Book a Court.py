@@ -105,30 +105,62 @@ def login_and_navigate_to_courts(driver, wait):
 
 def find_and_select_slot(driver, wait):
     """
-    Scans court rows for an available 13th time slot.
+    Scans for the first available slot starting between 20:30 and 21:30.
+    It does this by finding the vertical position of the time labels and matching
+    them against the vertical position of available slot buttons.
     Returns True if a slot is found and clicked, False otherwise.
     """
-    print("Checking court rows for an available 13th time slot...")
+    print("Searching for the first available slot between 20:30 and 21:30...")
     try:
-        court_rows = wait.until(EC.presence_of_all_elements_located((By.XPATH, "//div[./div/button[contains(@class, 'MuiButtonBase-root')]]")))
-        for index, row in enumerate(court_rows[:7]):
-            print(f"Checking court row {index + 1}...")
-            all_slots_in_row = row.find_elements(By.TAG_NAME, "button")
-            if len(all_slots_in_row) >= 13:
-                thirteenth_slot = all_slots_in_row[12]
-                try:
-                    thirteenth_slot.find_element(By.XPATH, ".//div[contains(@class, 'css-wpwytb')]")
-                    print(f"Found an available slot on row {index + 1}. Clicking it.")
-                    driver.execute_script("arguments[0].click();", thirteenth_slot)
+        # Step 1: Find the vertical coordinates of the desired time range.
+        # We use '20:30' as the start and '22:00' as the exclusive end boundary.
+        start_time_element = wait.until(EC.presence_of_element_located((By.XPATH, "//span[text()='20:30']")))
+        end_time_element = wait.until(EC.presence_of_element_located((By.XPATH, "//span[text()='22:00']")))
+
+        start_y = start_time_element.location['y']
+        end_y = end_time_element.location['y']
+        
+        # A small tolerance to account for minor pixel misalignments
+        tolerance = 5
+        
+        print(f"Time range y-coordinates found: Start at ~{start_y:.0f}px, End before ~{end_y:.0f}px.")
+
+        # Step 2: Get all court rows to iterate through them.
+        # This XPath finds the containers for each court's timeline.
+        court_rows = wait.until(EC.presence_of_all_elements_located((By.XPATH, "//div[div/span[contains(text(),'- Padel')]]/following-sibling::div")))
+
+        # Step 3: Iterate through each court and check for available slots in the time range.
+        for index, row in enumerate(court_rows[:7]): # Checking the first 7 padel courts
+            print(f"Checking Padel Court {index + 1}...")
+            
+            # Find only the available slots (buttons with the green plus icon) in the current row
+            available_slots = row.find_elements(By.XPATH, ".//button[.//div[contains(@class, 'css-wpwytb')]]")
+            
+            if not available_slots:
+                print(f"No available slots found on Court {index + 1}.")
+                continue
+
+            for slot in available_slots:
+                slot_y = slot.location['y']
+                
+                # Check if the slot's vertical position is within our target time range
+                if (start_y - tolerance) <= slot_y < (end_y - tolerance):
+                    print(f"✅ Found an available slot in the desired time range on Court {index + 1}!")
+                    print("Attempting to click the slot...")
+                    driver.execute_script("arguments[0].click();", slot)
                     time.sleep(1)
-                    return True
-                except NoSuchElementException:
-                    print(f"Slot on row {index + 1} is not available.")
-            else:
-                print(f"Row {index + 1} does not have 13 slots.")
+                    return True # Slot found and clicked, exit the function
+
+        # If the loop finishes without finding a suitable slot
+        print("❌ No available slots found between 20:30 and 21:30 on any court.")
+        return False
+
     except TimeoutException:
-        print("Could not find court rows. Page might not have loaded correctly.")
-    return False
+        print("Could not find time labels or court rows. The page structure may have changed.")
+        return False
+    except Exception as e:
+        print(f"An unexpected error occurred while finding a slot: {e}")
+        return False
 
 def complete_reservation(driver, wait):
     """Adds players and confirms the booking after a slot has been selected."""
