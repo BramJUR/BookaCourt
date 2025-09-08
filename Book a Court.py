@@ -1,7 +1,8 @@
+# --- Imports and setup (no changes) ---
 import time
 import os
 import sys
-from datetime import datetime
+import datetime # Import datetime for unique filenames
 from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -11,23 +12,181 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 
-# --- CONFIGURATION ---
-# Load environment variables from your .env file
+# Load environment variables
 load_dotenv()
 EMAIL = os.getenv("EMAIL")
 PASSWORD = os.getenv("PASSWORD")
 
-# Set your reservation preferences here
-TARGET_DAY = "Zondag"  # The day you want to book (e.g., "Zondag", "Maandag")
-TARGET_START_TIME = "20:30" # The earliest time slot you want
-# --- END CONFIGURATION ---
+# --- Function definitions (no changes) ---
 
+def login_and_navigate_to_courts(driver, wait):
+    """Performs all steps up to viewing the court schedule for the correct day."""
+    print("Navigating to the website...")
+    driver.get("https://www.ltvbest.nl/")
 
-def get_driver_and_wait():
-    """Initializes and returns the Chrome driver and a WebDriverWait instance."""
-    print("DEBUG: Setting up Chrome driver options...")
+    print("Waiting for page body to be present...")
+    wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+    print("Page body found.")
+
+    try:
+        print("Checking for cookie banner...")
+        cookie_wait = WebDriverWait(driver, 5)
+        cookie_button_xpath = "//button[contains(., 'Accepteer') or contains(., 'Accept')]"
+        cookie_button = cookie_wait.until(EC.element_to_be_clickable((By.XPATH, cookie_button_xpath)))
+        print("Cookie banner found. Clicking accept button...")
+        cookie_button.click()
+        time.sleep(1)
+    except TimeoutException:
+        print("No cookie banner found, continuing...")
+
+    print("Clicking the login button...")
+    login_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[text()='Inloggen']")))
+    login_button.click()
+    print("Entering credentials...")
+    email_input = wait.until(EC.visibility_of_element_located((By.ID, "login-username")))
+    email_input.send_keys(EMAIL)
+    password_input = driver.find_element(By.ID, "login-password")
+    password_input.send_keys(PASSWORD)
+    print("Submitting login form...")
+    submit_button = driver.find_element(By.XPATH, "//input[@value='Inloggen']")
+    submit_button.click()
+    time.sleep(2)
+
+    print("Navigating to the court reservation page...")
+    mijnltvbest_link = wait.until(EC.visibility_of_element_located((By.XPATH, "//a[contains(., 'MIJNLTVBEST')]")))
+    actions = ActionChains(driver)
+    actions.move_to_element(mijnltvbest_link).perform()
+    reserve_link = wait.until(EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, "Baan reserveren")))
+    reserve_link.click()
+    time.sleep(2)
+
+    print("Waiting for reservation iframe and switching to it...")
+    wait.until(EC.frame_to_be_available_and_switch_to_it((By.TAG_NAME, "iframe")))
+    print("Successfully switched to iframe.")
+
+    print("Opening court overview...")
+    overview_button_xpath = "//button[contains(., 'Overzicht banen') or contains(., 'Baanoverzicht')]"
+    overview_button = wait.until(EC.element_to_be_clickable((By.XPATH, overview_button_xpath)))
+    overview_button.click()
+
+    # --- NIEUWE FLEXIBELE LOGICA ---
+    print("Waiting for any loading overlay to disappear...")
+    try:
+        WebDriverWait(driver, 5).until(EC.invisibility_of_element_located((By.CLASS_NAME, "MuiBackdrop-root")))
+        print("Loading overlay handled.")
+    except TimeoutException:
+        print("No loading overlay was detected.")
+
+    print("Opening the date picker...")
+    try:
+        today_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Vandaag')]")))
+        today_button.click()
+    except Exception:
+        print("Could not click 'Vandaag', assuming alternate layout and clicking 'Overzicht banen' again.")
+        overview_button = wait.until(EC.element_to_be_clickable((By.XPATH, overview_button_xpath)))
+        overview_button.click()
+        print("Retrying to click 'Vandaag'...")
+        today_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Vandaag')]")))
+        today_button.click()
+    # --- EINDE NIEUWE LOGICA ---
+
+    print("Selecting the day...")
+    # Example: Select Saturday. Adjust logic as needed for specific day selection.
+    # Note: The original code selected "Zaterdag" then immediately overwrote it by selecting "Donderdag".
+    # I'm keeping the last selection ("Donderdag") as per the original script's final state.
+    # day_element = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Zaterdag')]"))) # Original line 1
+    day_element = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Zondag')]"))) # Original line 2
+    day_element.click()
+    print("Selected 'Zondag'.")
+    time.sleep(2)
+
+def find_and_select_slot(driver, wait):
+    """
+    Scans court rows for an available 13th time slot.
+    Returns True if a slot is found and clicked, False otherwise.
+    """
+    print("Checking court rows for an available 13th time slot...")
+    try:
+        # Wait for rows to be present to avoid stale elements after refresh
+        court_rows = wait.until(EC.presence_of_all_elements_located((By.XPATH, "//div[./div/button[contains(@class, 'MuiButtonBase-root')]]")))
+        print(f"Found {len(court_rows)} potential court rows.")
+
+        for index, row in enumerate(court_rows[:7]): # Limit check to first 7 courts
+            print(f"Checking court row {index + 1}...")
+            all_slots_in_row = row.find_elements(By.TAG_NAME, "button")
+
+            if len(all_slots_in_row) >= 13:
+                thirteenth_slot = all_slots_in_row[12] # Get the 13th slot (index 12)
+
+                # Check if the slot is available by looking for its specific 'available' class/structure.
+                # The XPath ".//div[contains(@class, 'css-wpwytb')]" seems to identify an available slot marker.
+                try:
+                    thirteenth_slot.find_element(By.XPATH, ".//div[contains(@class, 'css-wpwytb')]")
+                    print(f"✅ Found an available slot on row {index + 1}. Clicking it.")
+                    driver.execute_script("arguments[0].click();", thirteenth_slot)
+                    time.sleep(1) # Wait for click to register
+                    return True
+                except NoSuchElementException:
+                    print(f"Slot on row {index + 1} is not available (occupied or restricted).")
+            else:
+                print(f"Row {index + 1} does not have enough slots (found {len(all_slots_in_row)}, need at least 13).")
+    except TimeoutException:
+        print("Could not find court rows. Page might not have loaded correctly or structure changed.")
+    except Exception as e:
+        print(f"An unexpected error occurred during slot finding: {e}")
+
+    return False # Return False if no slot was found and clicked
+
+def complete_reservation(driver, wait):
+    """Adds players and confirms the booking after a slot has been selected."""
+    print("Selecting 60 minutes and 4 players...")
+    duration_players_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(., '60 min.') and contains(., '4')]")))
+    duration_players_button.click()
+    time.sleep(1)
+
+    print("\nAdding players to the reservation...")
+    player_2_box = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'css-18nf95b') and normalize-space(.//span)='Speler 2']")))
+    player_2_box.click()
+    time.sleep(2)
+
+    players_to_add = ["Luc Brenkman", "Valentijn Wiegmans", "Willem Peters"]
+    for player in players_to_add:
+        print(f"Adding player: {player}...")
+        add_button_xpath = f"//span[text()='{player}']/ancestor::div[contains(@class, 'css-1c1kq07')]/following-sibling::button"
+        add_button = wait.until(EC.element_to_be_clickable((By.XPATH, add_button_xpath)))
+        add_button.click()
+        print(f"Successfully added {player}.")
+        time.sleep(2) # Wait between adding players to avoid race conditions
+
+    print("\nWaiting 3 seconds before confirming reservation...")
+    time.sleep(3)
+
+    print("Attempting to click 'Reservering bevestigen' button using ActionChains...")
+    confirm_button_xpath = "//button[contains(., 'Reservering bevestigen')]"
+
+    try:
+        confirm_button = wait.until(EC.presence_of_element_located((By.XPATH, confirm_button_xpath)))
+        actions = ActionChains(driver)
+        actions.move_to_element(confirm_button).click().perform()
+        print("ActionChains click sent to confirmation button.")
+
+        print("Waiting for success notification...")
+        success_popup_xpath = "//*[contains(text(), 'succesvol')]"
+        WebDriverWait(driver, 15).until(EC.visibility_of_element_located((By.XPATH, success_popup_xpath)))
+        print("✅ Success notification appeared! Reservation is confirmed.")
+
+    except Exception as e:
+        print("The ActionChains click method failed during confirmation.")
+        raise e # Re-raise exception to be caught by the main error handler
+
+# --- Main Execution Block ---
+if __name__ == "__main__":
+    if not EMAIL or not PASSWORD:
+        print("Error: EMAIL or PASSWORD environment variables not set.")
+        sys.exit(1) # Use sys.exit for a cleaner exit
+
     chrome_options = Options()
     user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
     chrome_options.add_argument(f'user-agent={user_agent}')
@@ -38,242 +197,67 @@ def get_driver_and_wait():
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
-    
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-    wait = WebDriverWait(driver, 20) # 20-second timeout for waits
-    print("DEBUG: Chrome driver and wait object initialized.")
-    return driver, wait
 
-
-def login(driver, wait):
-    """Handles the initial website login process."""
-    print("STEP 1: LOGIN")
-    print(" -> Navigating to the website...")
-    driver.get("https://www.ltvbest.nl/")
-    wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-
+    driver = None # Initialize driver to None for finally block safety
     try:
-        print(" -> Checking for cookie banner...")
-        cookie_button = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Accepteer')]")))
-        cookie_button.click()
-        print(" -> Cookie banner accepted.")
-    except TimeoutException:
-        print(" -> No cookie banner found, continuing...")
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        wait = WebDriverWait(driver, 20)
 
-    print(" -> Clicking the main login button...")
-    wait.until(EC.element_to_be_clickable((By.XPATH, "//span[text()='Inloggen']"))).click()
-    
-    print(" -> Entering credentials...")
-    wait.until(EC.visibility_of_element_located((By.ID, "login-username"))).send_keys(EMAIL)
-    driver.find_element(By.ID, "login-password").send_keys(PASSWORD)
-    driver.find_element(By.XPATH, "//input[@value='Inloggen']").click()
-    
-    # Confirmation of successful login by finding the "Account" button
-    wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "a.show-account .btn-label")))
-    print(" -> Login successful. Account button is visible.")
+        print("--- Performing initial login and navigation ---")
+        login_and_navigate_to_courts(driver, wait)
+        print("--- Login and navigation successful ---")
 
+        slot_found = False
+        max_attempts = 100 # Original value: 100 attempts
+        for attempt in range(max_attempts):
+            print(f"\n--- Starting time slot search: Attempt {attempt + 1}/{max_attempts} ---")
+            if find_and_select_slot(driver, wait):
+                print("✅ Available time slot found and selected!")
+                slot_found = True
+                break # Exit loop on success
+            else:
+                print(f"❌ No available slot found on attempt {attempt + 1}.")
+                if attempt < max_attempts - 1:
+                    print("Refreshing page and preparing for next attempt...")
+                    driver.refresh()
+                    # Wait for a short period after refresh for page elements to settle before next loop iteration
+                    time.sleep(5)
+                    # The original code had a 15-minute wait here. Keeping it.
+                    # Remove or adjust 'time.sleep(15 * 60)' if faster retries are desired.
+                    print("Waiting 15 minutes before next retry...")
+                    time.sleep(15 * 60) # 15 minutes wait
 
-def navigate_and_select_day(driver, wait, target_day):
-    """Navigates to the court overview, handles a multi-step, conditional view, and selects the target day."""
-    print("\nSTEP 2: NAVIGATE AND SELECT DAY")
-    print(" -> Navigating directly to the reservation page...")
-    driver.get("https://www.ltvbest.nl/index.php?page=Afhangen")
-    
-    print(" -> Locating the reservation iframe on the main page...")
-    iframe_element = wait.until(EC.presence_of_element_located((By.TAG_NAME, "iframe")))
-    print(" -> Iframe found. Scrolling it into the center of the view...")
-    driver.execute_script("arguments[0].scrollIntoView({block: 'center', inline: 'nearest'});", iframe_element)
-    time.sleep(0.5)
-    print(" -> Scroll complete. Now switching focus to the iframe...")
-    
-    wait.until(EC.frame_to_be_available_and_switch_to_it((By.TAG_NAME, "iframe")))
-    print(" -> Successfully switched focus to iframe.")
-
-    # --- KEY FIX: MULTI-STEP NAVIGATION LOOP ---
-    print(" -> Starting navigation loop to reach the main schedule view...")
-    # This loop will try up to 3 times to click through intermediate screens.
-    for attempt in range(3):
-        print(f" -> Navigation attempt {attempt + 1}/3...")
-        date_picker_button_xpath = "//button[span[contains(@class, 'MuiButton-startIcon')]]"
-        
-        try:
-            # GOAL STATE: Check if the date picker button is visible.
-            WebDriverWait(driver, 3).until(EC.visibility_of_element_located((By.XPATH, date_picker_button_xpath)))
-            print(" -> SUCCESS: Date picker is visible. Main schedule view reached.")
-            break # Exit the loop if we've reached our goal
-        except TimeoutException:
-            # If date picker is not found, try to find a navigation button to click.
-            print(" -> Date picker not found. Searching for a navigation button ('Baanoverzicht' or 'Overzicht banen')...")
-            try:
-                # This flexible XPath handles both button texts.
-                overview_button_xpath = "//button[contains(., 'Overzicht banen') or contains(., 'Baanoverzicht')]"
-                overview_button = WebDriverWait(driver, 3).until(EC.element_to_be_clickable((By.XPATH, overview_button_xpath)))
-                print(f" -> Found navigation button with text: '{overview_button.text}'. Clicking it...")
-                overview_button.click()
-                time.sleep(1) # Wait a moment for the UI to update after the click
-            except TimeoutException:
-                # If no button is found, raise an error.
-                print(" -> CRITICAL: No date picker AND no navigation button found.")
-                raise TimeoutException("Could not find a navigation path to the main schedule view.")
-    else:
-        # This 'else' block runs if the 'for' loop completes without a 'break'.
-        raise TimeoutException("Failed to navigate to the main schedule view after 3 attempts.")
-    # --- END OF KEY FIX ---
-    
-    dialog_xpath = "//div[@role='dialog']"
-    
-    print(f" -> Opening date picker to select '{target_day}'...")
-    wait.until(EC.element_to_be_clickable((By.XPATH, date_picker_button_xpath))).click()
-    
-    print(" -> VERIFICATION: Waiting for date picker dialog to be visible...")
-    wait.until(EC.visibility_of_element_located((By.XPATH, dialog_xpath)))
-    print(" -> CONFIRMED: Date picker dialog is open.")
-
-    print(f" -> Clicking the '{target_day}' element in the picker...")
-    day_in_picker_xpath = f"//div[@role='dialog']//span[contains(text(), '{target_day}')]/ancestor::button[contains(@class, 'MuiPickersDay-root')]"
-    wait.until(EC.element_to_be_clickable((By.XPATH, day_in_picker_xpath))).click()
-
-    print(" -> VERIFICATION: Waiting for date picker dialog to close...")
-    wait.until(EC.invisibility_of_element_located((By.XPATH, dialog_xpath)))
-    print(" -> CONFIRMED: Date picker dialog has closed.")
-
-    print(f" -> VERIFICATION: Waiting for main date button text to update to '{target_day}'...")
-    wait.until(EC.text_to_be_present_in_element((By.XPATH, date_picker_button_xpath), target_day))
-    print(f" -> CONFIRMED: Page has updated to show '{target_day}'.")
-    
-    print(" -> Waiting for any loading spinners to disappear after date change...")
-    wait.until(EC.invisibility_of_element_located((By.CLASS_NAME, "MuiBackdrop-root")))
-    print(" -> Page is fully loaded and ready for scanning.")
-
-
-def find_and_select_slot(driver, wait, start_time):
-    """Scans the loaded schedule for an available slot and clicks it."""
-    print("\nSTEP 3: FIND AND SELECT TIME SLOT")
-    print(f" -> Scanning for the first available slot from {start_time} onwards...")
-    
-    hour = int(start_time.split(':')[0])
-    end_time_str = f"{hour + 2:02d}:00"
-    
-    print(f" -> Search window is from {start_time} up to (but not including) {end_time_str}.")
-
-    try:
-        print(" -> Locating time labels in HTML (will scroll if needed)...")
-        start_time_element = wait.until(EC.presence_of_element_located((By.XPATH, f"//span[text()='{start_time}']")))
-        end_time_element = wait.until(EC.presence_of_element_located((By.XPATH, f"//span[text()='{end_time_str}']")))
-        print(" -> Time labels found in HTML.")
-
-        print(" -> Scrolling time labels into view to get accurate coordinates...")
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center', inline: 'nearest'});", start_time_element)
-        time.sleep(0.5)
-        print(" -> Scroll complete.")
-
-        start_y = start_time_element.location['y']
-        end_y = end_time_element.location['y']
-        tolerance = 5
-        print(f" -> Search area defined by Y-coordinates: Start=~{start_y:.0f}px, End=~{end_y:.0f}px.")
-
-        print(" -> Locating all court timeline containers...")
-        court_slot_containers = wait.until(EC.visibility_of_all_elements_located((
-            By.XPATH, "//div[div/span[contains(text(),'- Padel')]]/following-sibling::div"
-        )))
-        print(f" -> Found {len(court_slot_containers)} court timelines.")
-
-        for index, container in enumerate(court_slot_containers[:7]):
-            court_name = f"Padel Court {index + 1}"
-            print(f" ---> Scanning {court_name}...")
-            
-            available_slots = container.find_elements(By.XPATH, ".//button[.//div[contains(@class, 'css-wpwytb')]]")
-            
-            if not available_slots:
-                print(f"      - No available slots on this court.")
-                continue
-
-            for slot in available_slots:
-                slot_y = slot.location['y']
-                if (start_y - tolerance) <= slot_y < (end_y - tolerance):
-                    print(f"      - ✅ SUCCESS! Found an available slot on {court_name} at Y-pos {slot_y:.0f}px.")
-                    driver.execute_script("arguments[0].click();", slot)
-                    return True
-
-        print("\n -> SCAN COMPLETE: No available slots were found in the target time window on any court.")
-        return False
-
-    except TimeoutException as e:
-        print(f" -> FATAL TIMEOUT in find_and_select_slot: Could not find a critical element on the page.")
-        raise e
-
-
-def complete_reservation(driver, wait):
-    """Adds players and confirms the booking after a slot has been selected."""
-    print("\nSTEP 4: COMPLETE RESERVATION")
-    print(" -> Switching focus back to the main document...")
-    driver.switch_to.default_content()
-
-    print(" -> Waiting for reservation panel and selecting 60 minutes / 4 players...")
-    duration_players_xpath = "//div[contains(@class, 'MuiBox-root')]//span[contains(text(), '60 min.')]/following-sibling::span[contains(text(), '4 Spelers')]"
-    wait.until(EC.element_to_be_clickable((By.XPATH, duration_players_xpath))).click()
-
-    print(" -> Opening player selection...")
-    player_2_box = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'css-18nf95b') and .//span[text()='Speler 2']]")))
-    player_2_box.click()
-    time.sleep(1)
-
-    players_to_add = ["Luc Brenkman", "Valentijn Wiegmans", "Willem Peters"]
-    for player in players_to_add:
-        print(f" -> Adding player: {player}...")
-        add_button_xpath = f"//span[text()='{player}']/ancestor::div[contains(@class, 'css-1c1kq07')]/following-sibling::button"
-        wait.until(EC.element_to_be_clickable((By.XPATH, add_button_xpath))).click()
-        print(f" -> Successfully added {player}.")
-        time.sleep(1)
-
-    print(" -> Finalizing... attempting to confirm reservation.")
-    confirm_button = wait.until(EC.presence_of_element_located((By.XPATH, "//button[contains(., 'Reservering bevestigen')]")))
-    
-    actions = ActionChains(driver)
-    actions.move_to_element(confirm_button).click().perform()
-    print(" -> Confirmation click sent.")
-
-    print(" -> VERIFICATION: Waiting for success notification...")
-    wait.until(EC.visibility_of_element_located((By.XPATH, "//*[contains(text(), 'succesvol')]")))
-    print(" -> CONFIRMED: Success notification appeared.")
-
-
-# --- Main Execution Block ---
-if __name__ == "__main__":
-    if not EMAIL or not PASSWORD:
-        print("FATAL ERROR: EMAIL or PASSWORD environment variables not set in .env file.")
-        sys.exit(1)
-
-    driver, wait = get_driver_and_wait()
-    
-    try:
-        login(driver, wait)
-        navigate_and_select_day(driver, wait, TARGET_DAY)
-
-        if find_and_select_slot(driver, wait, TARGET_START_TIME):
+        if slot_found:
+            print("\n--- Completing reservation ---")
             complete_reservation(driver, wait)
             print("\n🎉 Reservation successfully completed!")
-            driver.save_screenshot('success_screenshot.png')
-            print(" -> Screenshot saved as success_screenshot.png")
+
+            # Screenshot on success
+            success_filename = f"success_screenshot_{datetime.datetime.now():%Y%m%d_%H%M%S}.png"
+            driver.save_screenshot(success_filename)
+            print(f"Screenshot saved as {success_filename}")
         else:
-            print("\nSCRIPT FINISHED: No available time slots found. Exiting.")
-            driver.save_screenshot('no_slots_found.png')
-            print(" -> Screenshot saved as no_slots_found.png")
+            # --- MODIFICATION START ---
+            # Action requested: Take screenshot and stop if no time frame could be selected after all attempts.
+            print("\n❌ FINAL RESULT: Could not find an available time slot after all attempts.")
+            error_filename = f"failure_no_slot_{datetime.datetime.now():%Y%m%d_%H%M%S}.png"
+            driver.save_screenshot(error_filename)
+            print(f"Screenshot of final page state saved as {error_filename}.")
+            print("Exiting script.")
+            # --- MODIFICATION END ---
 
     except Exception as e:
-        print(f"\n❌ A FATAL AND UNEXPECTED ERROR OCCURRED: {type(e).__name__}")
-        print(f"   Error details: {e}")
-        print("   The script will now terminate.")
-        
-        # --- FILENAME FIX FOR GITHUB ARTIFACTS ---
-        filename = "fatal_error.png"
-        driver.save_screenshot(filename)
-        print(f" -> A debug screenshot has been saved as: {filename}")
-        sys.exit(1)
-        
-    finally:
-        print("\nClosing browser session.")
-        if 'driver' in locals() and driver:
-            driver.quit()
+        print(f"\n❌ A fatal, unexpected error occurred: {e}")
+        print("The script will now terminate.")
+        if driver:
+            # Screenshot on fatal crash/exception
+            fatal_error_filename = f"fatal_error_{datetime.datetime.now():%Y%m%d_%H%M%S}.png"
+            driver.save_screenshot(fatal_error_filename)
+            print(f"Screenshot saved as {fatal_error_filename}")
+        sys.exit(1) # Exit with error code
 
+    finally:
+        if driver:
+            print("\nClosing browser session.")
+            driver.quit()
