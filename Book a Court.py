@@ -84,9 +84,8 @@ def navigate_and_select_day(driver, wait, target_day):
     wait.until(EC.frame_to_be_available_and_switch_to_it((By.TAG_NAME, "iframe")))
     print(" -> Successfully switched focus to iframe.")
 
-    # --- NEW FLEXIBLE VIEW HANDLING LOGIC ---
+    # --- FLEXIBLE VIEW HANDLING LOGIC ---
     print(" -> Checking the initial state of the reservation view...")
-    # This is the button we ultimately want to interact with. If it's here, we're in the right view.
     date_picker_button_xpath = "//button[span[contains(@class, 'MuiButton-startIcon')]]"
     
     try:
@@ -94,26 +93,35 @@ def navigate_and_select_day(driver, wait, target_day):
         WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, date_picker_button_xpath)))
         print(" -> Initial state is already the 'Court Overview'. No extra click needed.")
     except TimeoutException:
-        # If the date picker isn't found, we're likely on a different screen.
         print(" -> Date picker not found. Assuming alternate view, now clicking 'Overzicht banen'...")
         wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Overzicht banen')]"))).click()
         print(" -> 'Overzicht banen' clicked. Now waiting for the schedule view to load...")
-        # After clicking, we MUST wait for the date picker button to appear to confirm the view has changed.
         wait.until(EC.element_to_be_clickable((By.XPATH, date_picker_button_xpath)))
         print(" -> Schedule view (with date picker) is now active.")
-    # --- END OF NEW LOGIC ---
+    # --- END OF FLEXIBLE LOGIC ---
 
+    # --- REVISED AND MORE ROBUST DAY SELECTION PROCESS ---
+    dialog_xpath = "//div[@role='dialog']"
+    
     print(f" -> Opening date picker to select '{target_day}'...")
     wait.until(EC.element_to_be_clickable((By.XPATH, date_picker_button_xpath))).click()
     
+    print(" -> VERIFICATION: Waiting for date picker dialog to be visible...")
+    wait.until(EC.visibility_of_element_located((By.XPATH, dialog_xpath)))
+    print(" -> CONFIRMED: Date picker dialog is open.")
+
     print(f" -> Clicking the '{target_day}' element in the picker...")
-    # The XPath for the day itself also needs to be more specific to avoid stale elements
-    day_in_picker_xpath = f"//div[contains(@role, 'dialog')]//div[contains(@class, 'MuiPickersDay-root')]//span[contains(text(), '{target_day}')]"
+    # This XPath is more robust: it finds the text, then its clickable button ancestor.
+    day_in_picker_xpath = f"//div[@role='dialog']//span[contains(text(), '{target_day}')]/ancestor::button[contains(@class, 'MuiPickersDay-root')]"
     wait.until(EC.element_to_be_clickable((By.XPATH, day_in_picker_xpath))).click()
 
-    print(f" -> VERIFICATION: Waiting for date button text to update to '{target_day}'...")
+    print(" -> VERIFICATION: Waiting for date picker dialog to close...")
+    wait.until(EC.invisibility_of_element_located((By.XPATH, dialog_xpath)))
+    print(" -> CONFIRMED: Date picker dialog has closed.")
+
+    print(f" -> VERIFICATION: Waiting for main date button text to update to '{target_day}'...")
     wait.until(EC.text_to_be_present_in_element((By.XPATH, date_picker_button_xpath), target_day))
-    print(f" -> CONFIRMED: Page has updated to '{target_day}'.")
+    print(f" -> CONFIRMED: Page has updated to show '{target_day}'.")
     
     print(" -> Waiting for any loading spinners to disappear after date change...")
     wait.until(EC.invisibility_of_element_located((By.CLASS_NAME, "MuiBackdrop-root")))
@@ -125,13 +133,11 @@ def find_and_select_slot(driver, wait, start_time):
     print("\nSTEP 3: FIND AND SELECT TIME SLOT")
     print(f" -> Scanning for the first available slot from {start_time} onwards...")
     
-    # Define the time window for the search (e.g., 20:30 to 22:30)
     hour = int(start_time.split(':')[0])
     end_time_str = f"{hour + 2:02d}:00"
     
     print(f" -> Search window is from {start_time} up to (but not including) {end_time_str}.")
 
-    # --- This entire block is now wrapped in a try/except for robust error handling ---
     try:
         print(" -> Locating time labels in HTML (will scroll if needed)...")
         start_time_element = wait.until(EC.presence_of_element_located((By.XPATH, f"//span[text()='{start_time}']")))
@@ -140,7 +146,7 @@ def find_and_select_slot(driver, wait, start_time):
 
         print(" -> Scrolling time labels into view to get accurate coordinates...")
         driver.execute_script("arguments[0].scrollIntoView({block: 'center', inline: 'nearest'});", start_time_element)
-        time.sleep(0.5) # Brief pause for scroll to complete
+        time.sleep(0.5)
         print(" -> Scroll complete.")
 
         start_y = start_time_element.location['y']
@@ -158,7 +164,6 @@ def find_and_select_slot(driver, wait, start_time):
             court_name = f"Padel Court {index + 1}"
             print(f" ---> Scanning {court_name}...")
             
-            # Find only the green "plus" buttons (available slots)
             available_slots = container.find_elements(By.XPATH, ".//button[.//div[contains(@class, 'css-wpwytb')]]")
             
             if not available_slots:
@@ -167,19 +172,16 @@ def find_and_select_slot(driver, wait, start_time):
 
             for slot in available_slots:
                 slot_y = slot.location['y']
-                # Check if the slot's vertical position is within our target window
                 if (start_y - tolerance) <= slot_y < (end_y - tolerance):
                     print(f"      - ✅ SUCCESS! Found an available slot on {court_name} at Y-pos {slot_y:.0f}px.")
                     driver.execute_script("arguments[0].click();", slot)
-                    return True # Slot found and clicked, exit function
+                    return True
 
         print("\n -> SCAN COMPLETE: No available slots were found in the target time window on any court.")
         return False
 
     except TimeoutException as e:
-        # This is a critical error if any of the elements can't be found
         print(f" -> FATAL TIMEOUT in find_and_select_slot: Could not find a critical element on the page.")
-        # Re-raise the exception to be caught by the main error handler
         raise e
 
 
@@ -187,17 +189,16 @@ def complete_reservation(driver, wait):
     """Adds players and confirms the booking after a slot has been selected."""
     print("\nSTEP 4: COMPLETE RESERVATION")
     print(" -> Switching focus back to the main document...")
-    driver.switch_to.default_content() # We were in an iframe, this is crucial
+    driver.switch_to.default_content()
 
     print(" -> Waiting for reservation panel and selecting 60 minutes / 4 players...")
-    # This XPath is more specific and robust
     duration_players_xpath = "//div[contains(@class, 'MuiBox-root')]//span[contains(text(), '60 min.')]/following-sibling::span[contains(text(), '4 Spelers')]"
     wait.until(EC.element_to_be_clickable((By.XPATH, duration_players_xpath))).click()
 
     print(" -> Opening player selection...")
     player_2_box = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class, 'css-18nf95b') and .//span[text()='Speler 2']]")))
     player_2_box.click()
-    time.sleep(1) # Short wait for player list to render
+    time.sleep(1)
 
     players_to_add = ["Luc Brenkman", "Valentijn Wiegmans", "Willem Peters"]
     for player in players_to_add:
@@ -210,7 +211,6 @@ def complete_reservation(driver, wait):
     print(" -> Finalizing... attempting to confirm reservation.")
     confirm_button = wait.until(EC.presence_of_element_located((By.XPATH, "//button[contains(., 'Reservering bevestigen')]")))
     
-    # Use ActionChains for a more reliable click on potentially tricky buttons
     actions = ActionChains(driver)
     actions.move_to_element(confirm_button).click().perform()
     print(" -> Confirmation click sent.")
@@ -247,8 +247,8 @@ if __name__ == "__main__":
         print(f"   Error details: {e}")
         print("   The script will now terminate.")
         
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"fatal_error_{timestamp}.png"
+        # --- FILENAME FIX FOR GITHUB ARTIFACTS ---
+        filename = "fatal_error.png"
         driver.save_screenshot(filename)
         print(f" -> A debug screenshot has been saved as: {filename}")
         sys.exit(1)
