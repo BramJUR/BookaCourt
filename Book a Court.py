@@ -84,7 +84,7 @@ def navigate_and_select_day(driver, wait, target_day):
     wait.until(EC.frame_to_be_available_and_switch_to_it((By.TAG_NAME, "iframe")))
     print(" -> Successfully switched focus to iframe.")
 
-    # --- FLEXIBLE VIEW HANDLING LOGIC ---
+    # --- KEY FIX: RESTORED AND IMPROVED FLEXIBLE VIEW HANDLING LOGIC ---
     print(" -> Checking the initial state of the reservation view...")
     date_picker_button_xpath = "//button[span[contains(@class, 'MuiButton-startIcon')]]"
     
@@ -93,12 +93,18 @@ def navigate_and_select_day(driver, wait, target_day):
         WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, date_picker_button_xpath)))
         print(" -> Initial state is already the 'Court Overview'. No extra click needed.")
     except TimeoutException:
-        print(" -> Date picker not found. Assuming alternate view, now clicking 'Overzicht banen'...")
-        wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Overzicht banen')]"))).click()
-        print(" -> 'Overzicht banen' clicked. Now waiting for the schedule view to load...")
+        # If the date picker isn't found, we're likely on the initial screen.
+        print(" -> Date picker not found. Assuming alternate view, now finding overview button...")
+        # This flexible XPath handles both "Overzicht banen" and "Baanoverzicht"
+        overview_button_xpath = "//button[contains(., 'Overzicht banen') or contains(., 'Baanoverzicht')]"
+        overview_button = wait.until(EC.element_to_be_clickable((By.XPATH, overview_button_xpath)))
+        print(f" -> Found overview button with text: '{overview_button.text}'. Clicking it...")
+        overview_button.click()
+        
+        print(" -> Overview button clicked. Now waiting for the schedule view to load...")
         wait.until(EC.element_to_be_clickable((By.XPATH, date_picker_button_xpath)))
         print(" -> Schedule view (with date picker) is now active.")
-    # --- END OF FLEXIBLE LOGIC ---
+    # --- END OF KEY FIX ---
 
     # --- REVISED AND MORE ROBUST DAY SELECTION PROCESS ---
     dialog_xpath = "//div[@role='dialog']"
