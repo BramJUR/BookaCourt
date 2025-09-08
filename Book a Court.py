@@ -75,7 +75,7 @@ def login(driver, wait):
 
 
 def navigate_and_select_day(driver, wait, target_day):
-    """Navigates to the court overview, switches to the iframe, and selects the target day."""
+    """Navigates to the court overview, handles different initial views, and selects the target day."""
     print("\nSTEP 2: NAVIGATE AND SELECT DAY")
     print(" -> Navigating directly to the reservation page...")
     driver.get("https://www.ltvbest.nl/index.php?page=Afhangen")
@@ -84,15 +84,32 @@ def navigate_and_select_day(driver, wait, target_day):
     wait.until(EC.frame_to_be_available_and_switch_to_it((By.TAG_NAME, "iframe")))
     print(" -> Successfully switched focus to iframe.")
 
-    print(" -> Clicking 'Overzicht banen' to ensure the main view is active...")
-    wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Overzicht banen')]"))).click()
+    # --- NEW FLEXIBLE VIEW HANDLING LOGIC ---
+    print(" -> Checking the initial state of the reservation view...")
+    # This is the button we ultimately want to interact with. If it's here, we're in the right view.
+    date_picker_button_xpath = "//button[span[contains(@class, 'MuiButton-startIcon')]]"
+    
+    try:
+        # Use a short timeout to quickly check if we're already on the schedule page
+        WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, date_picker_button_xpath)))
+        print(" -> Initial state is already the 'Court Overview'. No extra click needed.")
+    except TimeoutException:
+        # If the date picker isn't found, we're likely on a different screen.
+        print(" -> Date picker not found. Assuming alternate view, now clicking 'Overzicht banen'...")
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Overzicht banen')]"))).click()
+        print(" -> 'Overzicht banen' clicked. Now waiting for the schedule view to load...")
+        # After clicking, we MUST wait for the date picker button to appear to confirm the view has changed.
+        wait.until(EC.element_to_be_clickable((By.XPATH, date_picker_button_xpath)))
+        print(" -> Schedule view (with date picker) is now active.")
+    # --- END OF NEW LOGIC ---
 
     print(f" -> Opening date picker to select '{target_day}'...")
-    date_picker_button_xpath = "//button[span[contains(@class, 'MuiButton-startIcon')]]"
     wait.until(EC.element_to_be_clickable((By.XPATH, date_picker_button_xpath))).click()
     
     print(f" -> Clicking the '{target_day}' element in the picker...")
-    wait.until(EC.element_to_be_clickable((By.XPATH, f"//div[contains(@class, 'MuiPickersDay-root')]//span[contains(text(), '{target_day}')]"))).click()
+    # The XPath for the day itself also needs to be more specific to avoid stale elements
+    day_in_picker_xpath = f"//div[contains(@role, 'dialog')]//div[contains(@class, 'MuiPickersDay-root')]//span[contains(text(), '{target_day}')]"
+    wait.until(EC.element_to_be_clickable((By.XPATH, day_in_picker_xpath))).click()
 
     print(f" -> VERIFICATION: Waiting for date button text to update to '{target_day}'...")
     wait.until(EC.text_to_be_present_in_element((By.XPATH, date_picker_button_xpath), target_day))
@@ -238,4 +255,6 @@ if __name__ == "__main__":
         
     finally:
         print("\nClosing browser session.")
-        driver.quit()
+        if 'driver' in locals() and driver:
+            driver.quit()
+
