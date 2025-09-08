@@ -11,7 +11,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 # --- CONFIGURATION ---
 # Load environment variables from your .env file
@@ -75,44 +75,52 @@ def login(driver, wait):
 
 
 def navigate_and_select_day(driver, wait, target_day):
-    """Navigates to the court overview, handles different initial views, and selects the target day."""
+    """Navigates to the court overview, handles a multi-step, conditional view, and selects the target day."""
     print("\nSTEP 2: NAVIGATE AND SELECT DAY")
     print(" -> Navigating directly to the reservation page...")
     driver.get("https://www.ltvbest.nl/index.php?page=Afhangen")
     
-    # --- KEY FIX: SCROLL IFRAME INTO VIEW BEFORE SWITCHING ---
     print(" -> Locating the reservation iframe on the main page...")
     iframe_element = wait.until(EC.presence_of_element_located((By.TAG_NAME, "iframe")))
     print(" -> Iframe found. Scrolling it into the center of the view...")
     driver.execute_script("arguments[0].scrollIntoView({block: 'center', inline: 'nearest'});", iframe_element)
-    time.sleep(0.5) # A brief pause for the scroll to complete
+    time.sleep(0.5)
     print(" -> Scroll complete. Now switching focus to the iframe...")
-    # --- END OF KEY FIX ---
     
     wait.until(EC.frame_to_be_available_and_switch_to_it((By.TAG_NAME, "iframe")))
     print(" -> Successfully switched focus to iframe.")
 
-    # --- FLEXIBLE VIEW HANDLING LOGIC ---
-    print(" -> Checking the initial state of the reservation view...")
-    date_picker_button_xpath = "//button[span[contains(@class, 'MuiButton-startIcon')]]"
-    
-    try:
-        # Use a short timeout to quickly check if we're already on the schedule page
-        WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, date_picker_button_xpath)))
-        print(" -> Initial state is already the 'Court Overview'. No extra click needed.")
-    except TimeoutException:
-        print(" -> Date picker not found. Assuming alternate view, now finding overview button...")
-        overview_button_xpath = "//button[contains(., 'Overzicht banen') or contains(., 'Baanoverzicht')]"
-        overview_button = wait.until(EC.element_to_be_clickable((By.XPATH, overview_button_xpath)))
-        print(f" -> Found overview button with text: '{overview_button.text}'. Clicking it...")
-        overview_button.click()
+    # --- KEY FIX: MULTI-STEP NAVIGATION LOOP ---
+    print(" -> Starting navigation loop to reach the main schedule view...")
+    # This loop will try up to 3 times to click through intermediate screens.
+    for attempt in range(3):
+        print(f" -> Navigation attempt {attempt + 1}/3...")
+        date_picker_button_xpath = "//button[span[contains(@class, 'MuiButton-startIcon')]]"
         
-        print(" -> Overview button clicked. Now waiting for the schedule view to load...")
-        wait.until(EC.element_to_be_clickable((By.XPATH, date_picker_button_xpath)))
-        print(" -> Schedule view (with date picker) is now active.")
-    # --- END OF FLEXIBLE LOGIC ---
-
-    # --- REVISED AND MORE ROBUST DAY SELECTION PROCESS ---
+        try:
+            # GOAL STATE: Check if the date picker button is visible.
+            WebDriverWait(driver, 3).until(EC.visibility_of_element_located((By.XPATH, date_picker_button_xpath)))
+            print(" -> SUCCESS: Date picker is visible. Main schedule view reached.")
+            break # Exit the loop if we've reached our goal
+        except TimeoutException:
+            # If date picker is not found, try to find a navigation button to click.
+            print(" -> Date picker not found. Searching for a navigation button ('Baanoverzicht' or 'Overzicht banen')...")
+            try:
+                # This flexible XPath handles both button texts.
+                overview_button_xpath = "//button[contains(., 'Overzicht banen') or contains(., 'Baanoverzicht')]"
+                overview_button = WebDriverWait(driver, 3).until(EC.element_to_be_clickable((By.XPATH, overview_button_xpath)))
+                print(f" -> Found navigation button with text: '{overview_button.text}'. Clicking it...")
+                overview_button.click()
+                time.sleep(1) # Wait a moment for the UI to update after the click
+            except TimeoutException:
+                # If no button is found, raise an error.
+                print(" -> CRITICAL: No date picker AND no navigation button found.")
+                raise TimeoutException("Could not find a navigation path to the main schedule view.")
+    else:
+        # This 'else' block runs if the 'for' loop completes without a 'break'.
+        raise TimeoutException("Failed to navigate to the main schedule view after 3 attempts.")
+    # --- END OF KEY FIX ---
+    
     dialog_xpath = "//div[@role='dialog']"
     
     print(f" -> Opening date picker to select '{target_day}'...")
