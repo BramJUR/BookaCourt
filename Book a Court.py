@@ -97,9 +97,9 @@ def login_and_navigate_to_courts(driver, wait):
     # Note: The original code selected "Zaterdag" then immediately overwrote it by selecting "Donderdag".
     # I'm keeping the last selection ("Donderdag") as per the original script's final state.
     # day_element = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Zaterdag')]"))) # Original line 1
-    day_element = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Zondag')]"))) # Original line 2
+    day_element = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Maandag')]"))) # Original line 2
     day_element.click()
-    print("Selected 'Zondag'.")
+    print("Selected 'Maandag'.")
     time.sleep(2)
 
 def find_and_select_slot(driver, wait):
@@ -151,7 +151,7 @@ def complete_reservation(driver, wait):
     player_2_box.click()
     time.sleep(2)
 
-    players_to_add = ["Luc Brenkman", "Valentijn Wiegmans", "Willem Peters"]
+    players_to_add = ["Luc Brenkman", "Valentijn Wiegmans", "Quinten Wiegmans"]
     for player in players_to_add:
         print(f"Adding player: {player}...")
         add_button_xpath = f"//span[text()='{player}']/ancestor::div[contains(@class, 'css-1c1kq07')]/following-sibling::button"
