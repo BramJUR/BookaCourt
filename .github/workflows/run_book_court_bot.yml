@@ -5,7 +5,7 @@ on:
   schedule:
     
     # minuut - hour - day of month - month - day of week (0 is sunday)
-    - cron: '1 22 * * 1'
+    - cron: '5 22 * * 4'
 
 jobs:
   run-reservation-bot:
