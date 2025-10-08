@@ -97,47 +97,127 @@ def login_and_navigate_to_courts(driver, wait):
     # Note: The original code selected "Zaterdag" then immediately overwrote it by selecting "Donderdag".
     # I'm keeping the last selection ("Donderdag") as per the original script's final state.
     # day_element = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Zaterdag')]"))) # Original line 1
-    day_element = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Donderdag')]"))) # Original line 2
+    day_element = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Zondag')]"))) # Original line 2
     day_element.click()
     print("Selected 'Donderdag'.")
     time.sleep(2)
 
 def find_and_select_slot(driver, wait):
     """
-    Scans court rows for an available 13th time slot.
-    Returns True if a slot is found and clicked, False otherwise.
+    Zet eerst de 'lijst weergave' aan, klap alle banen (P1 t/m P7) open,
+    en klik daarna op het eerste slot met '20:30 - 21:30'.
+    Retourneert True als het slot is gevonden en aangeklikt, anders False.
     """
-    print("Checking court rows for an available 13th time slot...")
     try:
-        # Wait for rows to be present to avoid stale elements after refresh
-        court_rows = wait.until(EC.presence_of_all_elements_located((By.XPATH, "//div[./div/button[contains(@class, 'MuiButtonBase-root')]]")))
-        print(f"Found {len(court_rows)} potential court rows.")
+        # 1) Schakel naar lijstweergave
+        try:
+            list_toggle = wait.until(EC.element_to_be_clickable(
+                (By.XPATH, "//button[@type='button' and @value='list']")))
+            # Alleen klikken als hij nog niet actief is
+            aria_pressed = list_toggle.get_attribute("aria-pressed")
+            if aria_pressed in (None, "false"):
+                driver.execute_script("arguments[0].click();", list_toggle)
+                time.sleep(0.75)
+        except TimeoutException:
+            print("⚠️ Lijstweergave-knop niet gevonden; ga door met huidige weergave.")
 
-        for index, row in enumerate(court_rows[:7]): # Limit check to first 7 courts
-            print(f"Checking court row {index + 1}...")
-            all_slots_in_row = row.find_elements(By.TAG_NAME, "button")
-
-            if len(all_slots_in_row) >= 13:
-                thirteenth_slot = all_slots_in_row[12] # Get the 13th slot (index 12)
-
-                # Check if the slot is available by looking for its specific 'available' class/structure.
-                # The XPath ".//div[contains(@class, 'css-wpwytb')]" seems to identify an available slot marker.
+        # 2) Klap alle banen (P1 t/m P7) open
+        #    We zoeken naar alle accordion-samenvattingen (P 1 ... P 7) en klikken als ze dicht zijn.
+        try:
+            # even een korte wacht zodat de lijstweergave bouwt
+            time.sleep(0.5)
+            accordion_buttons = wait.until(EC.presence_of_all_elements_located(
+                (By.XPATH, "//button[contains(@class,'MuiAccordionSummary-root') and contains(@id,'Accordion')]")))
+            # Filter op P 1 t/m P 7
+            filtered = []
+            for btn in accordion_buttons:
                 try:
-                    thirteenth_slot.find_element(By.XPATH, ".//div[contains(@class, 'css-wpwytb')]")
-                    print(f"✅ Found an available slot on row {index + 1}. Clicking it.")
-                    driver.execute_script("arguments[0].click();", thirteenth_slot)
-                    time.sleep(1) # Wait for click to register
-                    return True
-                except NoSuchElementException:
-                    print(f"Slot on row {index + 1} is not available (occupied or restricted).")
-            else:
-                print(f"Row {index + 1} does not have enough slots (found {len(all_slots_in_row)}, need at least 13).")
-    except TimeoutException:
-        print("Could not find court rows. Page might not have loaded correctly or structure changed.")
-    except Exception as e:
-        print(f"An unexpected error occurred during slot finding: {e}")
+                    # Tekst als "P 2 " zit in een child-span; we controleren op 'P ' prefix
+                    if "P " in btn.text:
+                        filtered.append(btn)
+                except Exception:
+                    pass
 
-    return False # Return False if no slot was found and clicked
+            # Klik alles open dat nog niet open is
+            for btn in filtered:
+                try:
+                    expanded = btn.get_attribute("aria-expanded")
+                    if expanded == "false":
+                        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
+                        time.sleep(0.2)
+                        driver.execute_script("arguments[0].click();", btn)
+                        time.sleep(0.3)
+                except Exception as e:
+                    print(f"Kon baan-accordion niet openen: {e}")
+        except TimeoutException:
+            print("⚠️ Geen baan-accordions gevonden; ga verder met zoeken naar tijdslot.")
+
+        # 3) Zoek het eerste slot '20:30 - 21:30' en klik
+        #    We zoeken de tijdspan en gaan dan naar de container om het radio-element te klikken.
+        try:
+            # Wacht tot er in de lijst items verschijnen
+            wait.until(EC.presence_of_element_located(
+                (By.XPATH, "//span[normalize-space()='20:30 - 21:30']")))
+        except TimeoutException:
+            print("❌ Geen element met de tekst '20:30 - 21:30' gevonden.")
+            return False
+
+        time_spans = driver.find_elements(By.XPATH, "//span[normalize-space()='20:30 - 21:30']")
+        print(f"Gevonden tijdvakken met '20:30 - 21:30': {len(time_spans)}")
+
+        for sp in time_spans:
+            try:
+                # Container van één slot (zoals je voorbeeld met css-uu7ccs)
+                slot_container = sp.find_element(
+                    By.XPATH,
+                    "./ancestor::div[contains(@class,'MuiBox-root')][contains(@class,'css-uu7ccs')]"
+                )
+
+                # Zoek het radio-klikdoel binnen dit slot
+                # 1) Probeer direct de PrivateSwitchBase/input
+                radio_input_candidates = slot_container.find_elements(
+                    By.XPATH, ".//input[@type='radio']"
+                )
+
+                # 2) Back-up: klik de zichtbare radio wrapper (span met MuiRadio-root)
+                radio_span_candidates = slot_container.find_elements(
+                    By.XPATH, ".//span[contains(@class,'MuiRadio-root') or contains(@class,'PrivateSwitchBase-root')]"
+                )
+
+                target = None
+                if radio_input_candidates:
+                    target = radio_input_candidates[0]
+                elif radio_span_candidates:
+                    target = radio_span_candidates[0]
+                else:
+                    # Als er geen radio te vinden is, proberen we als back-up het hele slot te klikken
+                    target = slot_container
+
+                # Scroll in beeld en klik via JS (stabieler dan gewone .click bij overlay issues)
+                driver.execute_script("arguments[0].scrollIntoView({block:'center'});", target)
+                time.sleep(0.2)
+                try:
+                    driver.execute_script("arguments[0].click();", target)
+                except Exception:
+                    # Als JS-click weigert, probeer ActionChains
+                    actions = ActionChains(driver)
+                    actions.move_to_element(target).click().perform()
+
+                time.sleep(0.6)  # heel even wachten zodat selectie kan registreren
+                print("✅ Slot '20:30 - 21:30' aangeklikt.")
+                return True
+
+            except Exception as e:
+                print(f"Kon dit '20:30 - 21:30' slot niet aanklikken: {e}")
+                continue
+
+        print("❌ Geen klikbaar '20:30 - 21:30' slot gevonden in de lijst.")
+        return False
+
+    except Exception as e:
+        print(f"❌ Onverwachte fout in find_and_select_slot: {e}")
+        return False
+
 
 def complete_reservation(driver, wait):
     """Adds players and confirms the booking after a slot has been selected."""
