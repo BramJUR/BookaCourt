@@ -60,8 +60,8 @@ jobs:
         if: steps.check_booking.outputs.run_bot == 'true'
         env:
           # Use secrets for your credentials!
-          EMAIL: ${{ secrets.LTVBEST_EMAIL }}
-          PASSWORD: ${{ secrets.LTVBEST_PASSWORD }}
+          EMAIL: ${{ secrets.EMAIL }}
+          PASSWORD: ${{ secrets.PASSWORD }}
           TARGET_DAY: ${{ steps.check_booking.outputs.target_day }}
           TARGET_TIME: ${{ steps.check_booking.outputs.target_time }}
         run: python -u "Book a Court.py"
