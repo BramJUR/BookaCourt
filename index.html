@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Court Booking Configurator</title>
+    <link rel="stylesheet" href="style.css">
+</head><body>
+    <div class="container">
+        <h1>Court Booking Preferences</h1>
+        <p>Select the days and times you want the bot to book a court for you. After saving, copy the generated text and paste it into the `config.json` file in your GitHub repository.</p>
+
+        <div id="booking-form">
+            </div>
+
+        <button id="save-btn">Generate Config</button>
+
+        <div class="output-container">
+            <h2>Generated `config.json`</h2>
+            <p>Copy the content below:</p>
+            <textarea id="json-output" readonly rows="10"></textarea>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
