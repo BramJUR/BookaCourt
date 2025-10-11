@@ -64,7 +64,7 @@ jobs:
           PASSWORD: ${{ secrets.LTVBEST_PASSWORD }}
           TARGET_DAY: ${{ steps.check_booking.outputs.target_day }}
           TARGET_TIME: ${{ steps.check_booking.outputs.target_time }}
-        run: python book_court.py
+        run: python -u "Book a Court.py"
         
       - name: 📤 Upload Screenshots on Failure
         if: failure() && steps.check_booking.outputs.run_bot == 'true'
