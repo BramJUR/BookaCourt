@@ -20,7 +20,10 @@ jobs:
           
           # Calculate which day we need to book FOR. The rule is 6 days in advance.
           # GitHub runners are in UTC, so adjust your Make.com trigger if needed.
-          BOOK_FOR_DAY_INDEX=$(($(date +%u) + 5))
+          
+          # --- THIS IS THE ONLY LINE THAT HAS BEEN CHANGED ---
+          BOOK_FOR_DAY_INDEX=$(($(date +%u) + 6))
+          
           if [[ $BOOK_FOR_DAY_INDEX -gt 7 ]]; then
             BOOK_FOR_DAY_INDEX=$((BOOK_FOR_DAY_INDEX - 7))
           fi
