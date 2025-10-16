@@ -235,7 +235,7 @@ def complete_reservation(driver, wait):
             time.sleep(0.8)
 
         print("Confirming reservation...")
-        confirm_button_xpath = "//button[contains(., 'Reservering bevestigen')]"
+        confirm_button_xpath = "//button[contains(., 'Reservering bevestigen') or contains(., 'Volgende')]"
         confirm_button = wait.until(EC.element_to_be_clickable((By.XPATH, confirm_button_xpath)))
         ActionChains(driver).move_to_element(confirm_button).click().perform()
 
