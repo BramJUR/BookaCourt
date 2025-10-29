@@ -9,25 +9,24 @@ import sys
 import datetime
 # Import the 'load_dotenv' function to load environment variables from a .env file (for local testing).
 from dotenv import load_dotenv
-# Import the main 'webdriver' from Selenium, which is the core component that controls the browser.
-from selenium import webdriver
-# Import 'Options' to configure Chrome's behavior, like running in headless mode.
-from selenium.webdriver.chrome.options import Options
-# Import 'By' which is used to specify how to find elements on a page (e.g., by XPATH, ID, CSS_SELECTOR).
+
+# 1. REMOVE these standard Selenium imports
+# from selenium import webdriver
+# from selenium.webdriver.chrome.options import Options
+# from selenium.webdriver.chrome.service import Service
+# from webdriver_manager.chrome import ChromeDriverManager
+
+# 2. ADD this import instead
+import undetected_chromedriver as uc
+
+# 3. All other imports can stay the same
 from selenium.webdriver.common.by import By
-# Import 'ActionChains' to perform complex user actions like hovering over menus.
 from selenium.webdriver.common.action_chains import ActionChains
-# Import 'Service' to manage the WebDriver's browser driver (e.g., chromedriver).
-from selenium.webdriver.chrome.service import Service
-# Import 'WebDriverWait' to make the script wait for certain conditions to be met before proceeding.
 from selenium.webdriver.support.ui import WebDriverWait
-# Import 'expected_conditions' (aliased as EC) which defines various conditions to wait for (e.g., element is clickable).
 from selenium.webdriver.support import expected_conditions as EC
-# Import 'ChromeDriverManager' to automatically download and manage the correct version of chromedriver.
-from webdriver_manager.chrome import ChromeDriverManager
-# Import specific Selenium exceptions to handle errors gracefully.
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException, ElementClickInterceptedException
 
+# ... (rest of your file: custom exceptions, helper functions, etc.) ...
 # --- Load Environment Variables ---
 # Execute the function to load variables from a local .env file if it exists.
 load_dotenv()
@@ -331,35 +330,54 @@ if __name__ == "__main__":
     if not all([EMAIL, PASSWORD, TARGET_DAY, TARGET_TIME]):
         print("❌ Error: Missing one or more required environment variables.")
         sys.exit(1)
+        
     # Print a startup message to the log.
     print(f"🚀 Starting bot for {TARGET_DAY} at {TARGET_TIME}")
-    # Configure Chrome options for running in a server environment (GitHub Actions).
-    chrome_options = Options(); chrome_options.add_argument("--headless"); chrome_options.add_argument("--no-sandbox"); chrome_options.add_argument("--disable-dev-shm-usage"); chrome_options.add_argument("--window-size=1920,1080")
+    
+    # Configure Chrome options using uc.ChromeOptions
+    chrome_options = uc.ChromeOptions()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=1920,1080")
+    # Add a realistic User-Agent to be safe
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    
     # Initialize the driver variable to None so it exists in the 'finally' block.
     driver = None
     try:
-        # Set up the WebDriver service automatically.
-        service = Service(ChromeDriverManager().install())
-        # Create the WebDriver instance.
-        driver = webdriver.Chrome(service=service, options=chrome_options)
+        # Set up the WebDriver instance using uc.Chrome
+        # This automatically handles downloading and patching the chromedriver.
+        # The 'Service' and 'ChromeDriverManager' are no longer needed.
+        print("  - Launching undetected browser...")
+        driver = uc.Chrome(options=chrome_options, use_subprocess=True)
+        print("  - Browser launched.")
+        
         # Set up the default explicit wait time (e.g., 15 seconds).
         wait = WebDriverWait(driver, 15)
+        
         # Run the main login and navigation function.
         login_and_navigate_to_courts(driver, wait)
+        
         # Initialize a flag to track if we've successfully selected a slot.
         slot_found = False
+        
         # Start the main retry loop. It will try up to 30 times.
         for attempt in range(30):
             print(f"\n--- Time slot search: Attempt {attempt + 1}/30 ---")
+            
             # Call the function to find and select a slot.
             ok, reason = find_and_select_slot(driver, wait)
+            
             # If it returns 'ok' as True, we're done.
             if ok:
                 slot_found = True
                 break # Exit the loop.
+                
             # If the loop is not on its last iteration, attempt to recover.
             if attempt < 29:
                 print(f"🔁 Slot search failed (reason: {reason}). Attempting recovery...")
+                
                 # --- State-Aware Recovery Logic ---
                 # Check if the bot was logged out.
                 if is_logged_out(driver):
@@ -373,8 +391,9 @@ if __name__ == "__main__":
                         driver.refresh()
                 else:
                     # If still logged in, the issue is likely a UI glitch, so just refresh.
-                    print("  - State appears normal. Refreshing page as a standard recovery...")
+                    print("  - State appears normal. Refreshing page as a standard recovery...")
                     driver.refresh()
+                    
                 # --- END of State-Aware Recovery ---
                 try:
                     # After any recovery action, wait for the page and re-navigate to the correct day.
@@ -384,6 +403,7 @@ if __name__ == "__main__":
                     # If even the recovery navigation fails, log it and continue to the next attempt.
                     print(f"⚠️ Recovery navigation failed: {e}. Continuing to next attempt.")
                     screenshot(driver, "nav_recover_fail")
+                    
         # After the loop, check if a slot was ever found.
         if slot_found:
             # If yes, proceed to the final reservation steps.
@@ -397,12 +417,14 @@ if __name__ == "__main__":
             screenshot(driver, "failure_no_slot")
             # Exit with a non-zero status code to make the GitHub Action fail.
             sys.exit(1)
+            
     except Exception as e:
         # This is a catch-all for any unhandled error during the entire process.
         print(f"\n❌ An unrecoverable error occurred: {e}")
         if driver: screenshot(driver, "fatal_error")
         # Exit with a failure code.
         sys.exit(1)
+        
     finally:
         # This block will run no matter what happens (success or failure).
         if driver:
