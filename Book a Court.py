@@ -350,7 +350,8 @@ if __name__ == "__main__":
         # This automatically handles downloading and patching the chromedriver.
         # The 'Service' and 'ChromeDriverManager' are no longer needed.
         print("  - Launching undetected browser...")
-        driver = uc.Chrome(options=chrome_options, use_subprocess=True)
+        # We explicitly tell it to use version 140, which matches your browser
+        driver = uc.Chrome(version_main=140, options=chrome_options, use_subprocess=True)
         print("  - Browser launched.")
         
         # Set up the default explicit wait time (e.g., 15 seconds).
